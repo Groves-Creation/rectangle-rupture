@@ -485,6 +485,39 @@ describe("approval allocates inventory through the ledger", () => {
     expect(await driftCount()).toBe(0);
   });
 
+  it("returns status history in true chronological order", async () => {
+    // Regression: history used to sort by created_at, which broke twice over.
+    // Postgres now() is transaction-stable so the two rows written during
+    // approval tied, and the API server clock drifts from the database clock
+    // (~1s in local Docker), which could sort submit *after* approval.
+    const list = await app.inject({
+      method: "GET",
+      url: "/api/orders?status=inventory_allocated&limit=1",
+      headers: auth(hq),
+    });
+    const orderId = list.json().items[0]?.id;
+    expect(orderId).toBeTruthy();
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/api/orders/${orderId}`,
+      headers: auth(hq),
+    });
+
+    const statuses = detail.json().statusHistory.map((h: { toStatus: string }) => h.toStatus);
+    expect(statuses[0]).toBe("submitted");
+    expect(statuses.indexOf("approved")).toBeLessThan(statuses.indexOf("inventory_allocated"));
+
+    // Each entry's fromStatus must chain to the previous entry's toStatus.
+    const history = detail.json().statusHistory as Array<{
+      fromStatus: string | null;
+      toStatus: string;
+    }>;
+    for (let i = 1; i < history.length; i += 1) {
+      expect(history[i]!.fromStatus).toBe(history[i - 1]!.toStatus);
+    }
+  });
+
   it("forbids approval by a user without orders.approve", async () => {
     const list = await app.inject({
       method: "GET",

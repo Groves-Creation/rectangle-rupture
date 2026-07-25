@@ -160,8 +160,10 @@ export async function getOrderDetail(db: Database, orderId: string) {
     })
     .from(orderStatusHistory)
     .leftJoin(users, eq(users.id, orderStatusHistory.changedByUserId))
+    // Sequence, not created_at — see migration 0002 for why the wall clock is
+    // not a safe sort key here.
     .where(eq(orderStatusHistory.orderId, orderId))
-    .orderBy(orderStatusHistory.createdAt);
+    .orderBy(orderStatusHistory.sequence);
 
   return {
     id: order.id,

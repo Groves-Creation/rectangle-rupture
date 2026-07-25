@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [Master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typescript:
+    name: TypeScript (api, admin, packages)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: lit
+          POSTGRES_PASSWORD: lit_local_dev
+          POSTGRES_DB: lit_distribution
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U lit -d lit_distribution"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://lit:lit_local_dev@localhost:5433/lit_distribution
+      REDIS_URL: redis://localhost:6379
+      # CI-only value; production secrets never live in the repository.
+      JWT_SECRET: ci_only_secret_value_at_least_32_characters_long
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Migrate
+        run: pnpm db:migrate
+
+      # Catches a schema edit that was never turned into a migration.
+      - name: Check for schema drift
+        run: pnpm --filter @lit/database exec drizzle-kit check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm --filter @lit/api test
+
+      - name: Build
+        run: pnpm build
+
+  flutter:
+    name: Flutter (Android)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # AGP requires 17; the local machine has 25 installed, so pin it here
+          # too rather than letting the runner default drift.
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.6
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --set-exit-if-changed .
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build dev APK
+        run: flutter build apk --flavor dev --debug

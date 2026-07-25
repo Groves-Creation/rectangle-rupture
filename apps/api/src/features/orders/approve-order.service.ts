@@ -107,6 +107,9 @@ export async function approveOrder(
       })
       .where(eq(orders.id, order.id));
 
+    // Timestamps are left to the database. Display order comes from the
+    // sequence column, so these two rows sharing a transaction timestamp is
+    // fine and no longer ambiguous.
     await tx.insert(orderStatusHistory).values([
       {
         orderId: order.id,

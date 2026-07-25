@@ -144,6 +144,15 @@ export const orderStatusHistory = pgTable(
   "order_status_history",
   {
     id: primaryId(),
+    /**
+     * Insertion order, used for display instead of created_at.
+     *
+     * Wall clock is not a safe sort key here: rows written inside one
+     * transaction share Postgres' transaction-stable now(), and the API server
+     * clock can drift from the database clock (observed ~1s in local Docker).
+     * A sequence is monotonic regardless of either clock.
+     */
+    sequence: bigserial("sequence", { mode: "number" }).notNull(),
     orderId: uuid("order_id")
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
@@ -157,5 +166,5 @@ export const orderStatusHistory = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("order_status_history_order_idx").on(t.orderId, t.createdAt)],
+  (t) => [index("order_status_history_order_idx").on(t.orderId, t.sequence)],
 );

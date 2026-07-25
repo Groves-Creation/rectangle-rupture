@@ -11,8 +11,7 @@ allowBuilds:
 
 # apps/mobile is a Flutter project and is intentionally excluded from the
 # pnpm workspace graph.
-
-onlyBuiltDependencies:
-  - "@node-rs/argon2"
-  - esbuild
-  - sharp
+#
+# `allowBuilds` above replaces the older `onlyBuiltDependencies` list in
+# pnpm 11. unrs-resolver is denied deliberately: it runs no install script we
+# need, it only performs an eslint resolver binding check.

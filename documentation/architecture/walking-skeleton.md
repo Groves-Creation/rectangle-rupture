@@ -132,7 +132,7 @@ These are the reason the skeleton exists. Encode them in SQL, not just app code.
    `case_price_snapshot`, `price_book_item_id`. Never join to live pricing when
    displaying a submitted order (spec §8.4).
 
-5. **Full status enum from day one.** `order_status` Postgres enum contains all 16
+5. **Full status enum from day one.** `order_status` Postgres enum contains all 17
    values from spec §5.8 (`submitted` … `delivery_failed`), even though the slice
    only exercises `submitted → under_review → approved → allocated`. Adding enum
    values later is a migration; having them now costs nothing.

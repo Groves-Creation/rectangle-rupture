@@ -15,6 +15,13 @@
       "when": 1785003565805,
       "tag": "0001_ledger_append_only",
       "breakpoints": false
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785003565806,
+      "tag": "0002_status_history_sequence",
+      "breakpoints": false
     }
   ]
 }
