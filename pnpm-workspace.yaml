@@ -1,0 +1,18 @@
+packages:
+  - "apps/api"
+  - "apps/admin"
+  - "packages/*"
+
+allowBuilds:
+  esbuild: true
+  "@node-rs/argon2": true
+  sharp: true
+  unrs-resolver: false
+
+# apps/mobile is a Flutter project and is intentionally excluded from the
+# pnpm workspace graph.
+
+onlyBuiltDependencies:
+  - "@node-rs/argon2"
+  - esbuild
+  - sharp

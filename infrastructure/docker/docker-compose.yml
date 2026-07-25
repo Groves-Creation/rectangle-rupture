@@ -1,0 +1,43 @@
+name: lit-distribution
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: lit_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lit_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-lit_distribution}
+      # Deterministic collation so ORDER BY matches across dev machines and CI.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US --encoding=UTF8"
+    ports:
+      # Host 5433, not 5432: this machine runs a native PostgreSQL 18 Windows
+      # service on 5432, which would otherwise shadow this container.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lit} -d ${POSTGRES_DB:-lit_distribution}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    container_name: lit_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:
