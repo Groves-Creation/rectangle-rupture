@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext HTTP is only permitted for the local development API hosts.
+  This file is referenced ONLY from the dev and staging manifests
+  (android/app/src/dev/AndroidManifest.xml and .../staging/AndroidManifest.xml).
+  The prod flavour never references it, so production keeps Android's default
+  "cleartext denied" posture.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Wi-Fi LAN address of the dev machine -->
+        <domain includeSubdomains="false">192.168.1.144</domain>
+        <!-- Tailscale address of the dev machine -->
+        <domain includeSubdomains="false">100.88.157.98</domain>
+        <!-- Loopback (adb reverse) -->
+        <domain includeSubdomains="false">localhost</domain>
+        <!-- Android emulator alias for the host machine's loopback -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>
