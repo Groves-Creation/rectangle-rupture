@@ -1,0 +1,57 @@
+# ---- Environment ----
+.env
+.env.*
+!.env.example
+
+# ---- Node / TypeScript ----
+node_modules/
+dist/
+build/
+out/
+*.tsbuildinfo
+.turbo/
+.next/
+coverage/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ---- Flutter / Dart ----
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/build/
+apps/mobile/.pub-cache/
+apps/mobile/.pub/
+*.lock.bak
+
+# ---- Android ----
+apps/mobile/android/local.properties
+apps/mobile/android/.gradle/
+apps/mobile/android/app/debug/
+apps/mobile/android/app/profile/
+apps/mobile/android/app/release/
+*.jks
+*.keystore
+key.properties
+google-services.json
+
+# ---- iOS (future) ----
+apps/mobile/ios/Pods/
+apps/mobile/ios/.symlinks/
+apps/mobile/ios/Flutter/Flutter.framework
+apps/mobile/ios/Flutter/Generated.xcconfig
+GoogleService-Info.plist
+
+# ---- Editors / OS ----
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.iml
+.DS_Store
+Thumbs.db
+
+# ---- Local data ----
+infrastructure/docker/data/
+*.sqlite
+*.sqlite3
