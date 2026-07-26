@@ -125,6 +125,55 @@ export const CatalogDetailResponseSchema = CatalogItemSchema.extend({
   warehouseId: z.string().uuid(),
 });
 
+const ProductImageUploadSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  /** Base64 only (no data-URL prefix). The API verifies size and magic bytes. */
+  base64: z.string().min(1),
+});
+
+export const CreateCatalogProductSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(4_000).optional(),
+  brandName: z.string().trim().max(120).optional(),
+  categoryName: z.string().trim().max(120).optional(),
+  sku: z.string().trim().min(1).max(80),
+  variantName: z.string().trim().max(120).optional(),
+  barcode: z.string().trim().max(80).optional(),
+  barcodeType: z.string().trim().min(1).max(20).default("UPC"),
+  unitPrice: MoneySchema.refine((value) => !value.startsWith("-") && value !== "0.0000", {
+    message: "Unit price must be greater than zero",
+  }),
+  casePrice: MoneySchema.refine((value) => !value.startsWith("-") && value !== "0.0000", {
+    message: "Case price must be greater than zero",
+  }).optional(),
+  unitsPerCase: z.number().int().min(1).max(100_000),
+  minimumOrderQuantity: z.number().int().min(1).max(100_000).default(1),
+  warehouseId: z.string().uuid(),
+  initialStock: z.number().int().min(0).max(100_000_000).default(0),
+  isAgeRestricted: z.boolean().default(false),
+  image: ProductImageUploadSchema.optional(),
+});
+
+export const CreateCatalogProductResponseSchema = z.object({
+  productId: z.string().uuid(),
+  variantId: z.string().uuid(),
+  sku: z.string(),
+  imageUrl: z.string().nullable(),
+});
+
+export const CatalogIngestMetadataSchema = z.object({
+  brands: z.array(z.string()),
+  categories: z.array(z.string()),
+  warehouses: z.array(
+    z.object({
+      id: z.string().uuid(),
+      code: z.string(),
+      name: z.string(),
+    }),
+  ),
+});
+
 // ---------------------------------------------------------------------------
 // Cart
 // ---------------------------------------------------------------------------
@@ -266,6 +315,7 @@ export const OrderListResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export type CatalogItem = z.infer<typeof CatalogItemSchema>;
+export type CreateCatalogProduct = z.infer<typeof CreateCatalogProductSchema>;
 export type CartResponse = z.infer<typeof CartResponseSchema>;
 export type OrderSummary = z.infer<typeof OrderSummarySchema>;
 export type OrderDetail = z.infer<typeof OrderDetailSchema>;

@@ -9,7 +9,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import type { SortingState } from "@tanstack/react-table";
-import { LoaderCircle, Search } from "lucide-react";
+import { ImageIcon, LoaderCircle, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { ApiErrorNotice } from "@/components/api-error-notice";
@@ -26,9 +26,15 @@ import {
 } from "@/components/ui/table";
 import { listCatalogAction } from "@/lib/actions/catalog";
 import type { SerializedError } from "@/lib/api/errors";
-import type { AuthStore, CatalogItem, CatalogResponse } from "@/lib/api/types";
+import type {
+  AuthStore,
+  CatalogIngestMetadata,
+  CatalogItem,
+  CatalogResponse,
+} from "@/lib/api/types";
 import { formatQuantity } from "@/lib/format";
 import { compareMoney, formatMoney } from "@/lib/money";
+import { ProductIngestDialog } from "./product-ingest-dialog";
 
 const columnHelper = createColumnHelper<CatalogItem>();
 
@@ -36,9 +42,14 @@ export interface ProductsTableProps {
   storeId: string;
   stores: AuthStore[];
   initialData: CatalogResponse | null;
+  ingestMetadata: CatalogIngestMetadata | null;
 }
 
-export function ProductsTable({ storeId, initialData }: ProductsTableProps) {
+export function ProductsTable({
+  storeId,
+  initialData,
+  ingestMetadata,
+}: ProductsTableProps) {
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([
     { id: "name", desc: false },
@@ -68,6 +79,30 @@ export function ProductsTable({ storeId, initialData }: ProductsTableProps) {
 
   const columns = useMemo(
     () => [
+      columnHelper.display({
+        id: "image",
+        header: "",
+        cell: ({ row }) => (
+          <span
+            role="img"
+            aria-label={
+              row.original.imageUrl
+                ? `${row.original.name} product image`
+                : `${row.original.name} has no product image`
+            }
+            className="flex size-10 items-center justify-center rounded-md bg-muted bg-cover bg-center"
+            style={
+              row.original.imageUrl
+                ? { backgroundImage: `url("${row.original.imageUrl}")` }
+                : undefined
+            }
+          >
+            {row.original.imageUrl ? null : (
+              <ImageIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+            )}
+          </span>
+        ),
+      }),
       columnHelper.accessor("sku", {
         header: "SKU",
         cell: (info) => (
@@ -181,6 +216,9 @@ export function ProductsTable({ storeId, initialData }: ProductsTableProps) {
               ? `${formatQuantity(rows.length)} of ${formatQuantity(query.data.total)} items`
               : "—"}
           </span>
+          {ingestMetadata ? (
+            <ProductIngestDialog metadata={ingestMetadata} />
+          ) : null}
         </div>
       </div>
 

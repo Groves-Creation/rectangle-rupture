@@ -113,6 +113,23 @@ export interface CatalogResponse {
   offset: number;
 }
 
+export interface CatalogIngestMetadata {
+  brands: string[];
+  categories: string[];
+  warehouses: Array<{
+    id: string;
+    code: string;
+    name: string;
+  }>;
+}
+
+export interface CreateCatalogProductResponse {
+  productId: string;
+  variantId: string;
+  sku: string;
+  imageUrl: string | null;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Orders                                                                     */
 /* -------------------------------------------------------------------------- */

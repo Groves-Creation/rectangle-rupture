@@ -14,6 +14,10 @@ const EnvSchema = z.object({
   API_HOST: z.string().default("0.0.0.0"),
   ACCESS_TOKEN_TTL: z.string().default("15m"),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().default(30),
+  /** Absolute base used in image URLs returned to mobile clients. */
+  PUBLIC_API_URL: z.string().url().optional(),
+  /** May be absolute or relative to the API process working directory. */
+  IMAGE_UPLOAD_DIR: z.string().default("../../data/product-images"),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

@@ -267,6 +267,132 @@ describe("location-based access control", () => {
   });
 });
 
+describe("catalog product ingest", () => {
+  it("lets HQ create an orderable product with opening stock and an image", async () => {
+    const metadata = await app.inject({
+      method: "GET",
+      url: "/api/catalog/ingest-metadata",
+      headers: auth(hq),
+    });
+    expect(metadata.statusCode).toBe(200);
+    const warehouseId = metadata.json().warehouses[0]?.id as string;
+    expect(warehouseId).toBeTruthy();
+
+    const suffix = Date.now().toString();
+    const sku = `INGEST-${suffix}`;
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/catalog",
+      headers: auth(hq),
+      payload: {
+        name: "API Ingest Test Product",
+        description: "Created by the catalog ingest invariant test",
+        brandName: "Ingest Test Brand",
+        categoryName: "Ingest Test Category",
+        sku,
+        variantName: "Single",
+        barcode: `TEST${suffix}`,
+        barcodeType: "UPC",
+        unitPrice: "3.2500",
+        casePrice: "36.0000",
+        unitsPerCase: 12,
+        minimumOrderQuantity: 1,
+        warehouseId,
+        initialStock: 24,
+        isAgeRestricted: false,
+        image: {
+          fileName: "pixel.png",
+          contentType: "image/png",
+          base64:
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        },
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().sku).toBe(sku);
+    expect(created.json().imageUrl).toMatch(/\/api\/catalog\/images\/.+\.png$/);
+
+    const imagePath = new URL(created.json().imageUrl as string).pathname;
+    const image = await app.inject({ method: "GET", url: imagePath });
+    expect(image.statusCode).toBe(200);
+    expect(image.headers["content-type"]).toContain("image/png");
+
+    const items = await catalogItems(manager, await firstStoreId());
+    const item = items.find((candidate) => candidate.sku === sku);
+    expect(item).toMatchObject({
+      unitPrice: "3.2500",
+      unitsPerCase: 12,
+      availableAtWarehouse: 24,
+    });
+    expect(await driftCount()).toBe(0);
+  });
+
+  it("forbids store managers from writing the catalog", async () => {
+    const deniedMetadata = await app.inject({
+      method: "GET",
+      url: "/api/catalog/ingest-metadata",
+      headers: auth(manager),
+    });
+    expect(deniedMetadata.statusCode).toBe(403);
+
+    const allowedMetadata = await app.inject({
+      method: "GET",
+      url: "/api/catalog/ingest-metadata",
+      headers: auth(hq),
+    });
+    const warehouseId = allowedMetadata.json().warehouses[0]?.id as string;
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/catalog",
+      headers: auth(manager),
+      payload: {
+        name: "Forbidden Product",
+        sku: `FORBIDDEN-${Date.now()}`,
+        unitPrice: "1.0000",
+        unitsPerCase: 1,
+        minimumOrderQuantity: 1,
+        warehouseId,
+        initialStock: 0,
+        isAgeRestricted: false,
+      },
+    });
+    expect(created.statusCode).toBe(403);
+  });
+
+  it("rejects an image whose bytes do not match its content type", async () => {
+    const metadata = await app.inject({
+      method: "GET",
+      url: "/api/catalog/ingest-metadata",
+      headers: auth(hq),
+    });
+    const warehouseId = metadata.json().warehouses[0]?.id as string;
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/catalog",
+      headers: auth(hq),
+      payload: {
+        name: "Bad Image Product",
+        sku: `BAD-IMAGE-${Date.now()}`,
+        unitPrice: "1.0000",
+        unitsPerCase: 1,
+        minimumOrderQuantity: 1,
+        warehouseId,
+        initialStock: 0,
+        isAgeRestricted: false,
+        image: {
+          fileName: "not-really.png",
+          contentType: "image/png",
+          base64: Buffer.from("not an image").toString("base64"),
+        },
+      },
+    });
+    expect(created.statusCode).toBe(400);
+    expect(created.json().error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
 describe("order submission", () => {
   it("is idempotent under a replayed Idempotency-Key", async () => {
     const storeId = await firstStoreId();
