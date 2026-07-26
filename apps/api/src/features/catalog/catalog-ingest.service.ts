@@ -58,7 +58,12 @@ export async function getCatalogIngestMetadata(db: Database, userId: string) {
       .select({ id: locations.id, code: locations.code, name: locations.name })
       .from(warehouses)
       .innerJoin(locations, eq(locations.id, warehouses.locationId))
-      .where(eq(locations.organizationId, organizationId))
+      .where(
+        and(
+          eq(locations.organizationId, organizationId),
+          eq(locations.isActive, true),
+        ),
+      )
       .orderBy(asc(locations.name)),
   ]);
 
@@ -176,10 +181,15 @@ export async function createCatalogProduct(
       and(
         eq(locations.id, input.warehouseId),
         eq(locations.organizationId, organizationId),
+        eq(locations.isActive, true),
       ),
     )
     .limit(1);
-  if (!warehouse) throw ApiError.validation("Warehouse does not belong to your organization");
+  if (!warehouse) {
+    throw ApiError.validation(
+      "Warehouse is inactive or does not belong to your organization",
+    );
+  }
 
   const [book] = await db
     .select({ id: priceBooks.id })

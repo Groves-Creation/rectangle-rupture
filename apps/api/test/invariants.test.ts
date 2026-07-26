@@ -6,6 +6,7 @@ import {
   createDatabase,
   inventoryBalances,
   inventoryMovements,
+  locations,
   priceBookItems,
   productVariants,
   recordMovement,
@@ -390,6 +391,71 @@ describe("catalog product ingest", () => {
     });
     expect(created.statusCode).toBe(400);
     expect(created.json().error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("excludes inactive warehouses and refuses opening inventory against them", async () => {
+    const metadataBefore = await app.inject({
+      method: "GET",
+      url: "/api/catalog/ingest-metadata",
+      headers: auth(hq),
+    });
+    expect(metadataBefore.statusCode).toBe(200);
+    const warehouseId = metadataBefore.json().warehouses[0]?.id as string;
+    expect(warehouseId).toBeTruthy();
+
+    const sku = `INACTIVE-WH-${Date.now()}`;
+    await db
+      .update(locations)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(locations.id, warehouseId));
+
+    try {
+      const metadataAfter = await app.inject({
+        method: "GET",
+        url: "/api/catalog/ingest-metadata",
+        headers: auth(hq),
+      });
+      expect(metadataAfter.statusCode).toBe(200);
+      expect(
+        metadataAfter
+          .json()
+          .warehouses.some((warehouse: { id: string }) => warehouse.id === warehouseId),
+      ).toBe(false);
+
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/catalog",
+        headers: auth(hq),
+        payload: {
+          name: "Inactive Warehouse Product",
+          sku,
+          unitPrice: "1.0000",
+          unitsPerCase: 1,
+          minimumOrderQuantity: 1,
+          warehouseId,
+          initialStock: 10,
+          isAgeRestricted: false,
+        },
+      });
+      expect(created.statusCode).toBe(400);
+      expect(created.json().error).toMatchObject({
+        code: "VALIDATION_ERROR",
+        message: expect.stringMatching(/inactive/i),
+      });
+
+      const [variant] = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(eq(productVariants.sku, sku))
+        .limit(1);
+      expect(variant).toBeUndefined();
+      expect(await driftCount()).toBe(0);
+    } finally {
+      await db
+        .update(locations)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(eq(locations.id, warehouseId));
+    }
   });
 });
 
