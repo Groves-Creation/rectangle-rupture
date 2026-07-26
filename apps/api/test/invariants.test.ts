@@ -4,12 +4,18 @@ import { and, eq, sql } from "drizzle-orm";
 import {
   InsufficientInventoryError,
   createDatabase,
+  customerInvitations,
+  customers,
   inventoryBalances,
   inventoryMovements,
   locations,
   priceBookItems,
   productVariants,
   recordMovement,
+  stores,
+  userLocationAccess,
+  userRoles,
+  users,
 } from "@lit/database";
 import { auth, loginAs, makeApp, type Session } from "./helpers.js";
 import { addMoney, multiplyMoney, parseMoney } from "../src/lib/money.js";
@@ -782,6 +788,180 @@ describe("approval allocates inventory through the ledger", () => {
     });
     expect(res.statusCode).toBe(422);
     expect(await driftCount()).toBe(0);
+  });
+});
+
+describe("customer onboarding is durable and atomic", () => {
+  it("restricts customer workspace access to HQ customer managers", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/customers",
+      headers: auth(manager),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("creates the customer, store, scoped user, and invitation together", async () => {
+    const optionsResponse = await app.inject({
+      method: "GET",
+      url: "/api/customers/setup-options",
+      headers: auth(hq),
+    });
+    expect(optionsResponse.statusCode).toBe(200);
+    const options = optionsResponse.json();
+    const warehouseId = options.warehouses[0]?.id as string;
+    const priceBookId = options.priceBooks[0]?.id as string;
+    expect(warehouseId).toBeTruthy();
+    expect(priceBookId).toBeTruthy();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/customers",
+      headers: auth(hq),
+      payload: {
+        businessName: "Juniper Market Group",
+        accountCode: "JMG-01",
+        businessType: "Independent retailer",
+        contactEmail: "operations@juniper.test",
+        contactPhone: "(303) 555-0142",
+        locationName: "Pearl Street",
+        address: "1420 Pearl Street",
+        city: "Boulder",
+        state: "CO",
+        postalCode: "80302",
+        timezone: "America/Denver",
+        warehouseId,
+        priceBookId,
+        orderMinimum: "250.0000",
+        paymentTerms: "Net 30",
+        deliveryDays: ["Tuesday", "Friday"],
+        orderNotes: "Receiving entrance on Walnut Street",
+        inviteName: "Taylor Morgan",
+        inviteEmail: "taylor@juniper.test",
+        inviteRole: "store_manager",
+        sendWelcome: true,
+      },
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json().customer;
+    expect(created.name).toBe("Juniper Market Group");
+    expect(created.status).toBe("invite_pending");
+    expect(created.location.name).toBe("Pearl Street");
+    expect(created.manager.email).toBe("taylor@juniper.test");
+    expect(created.invitation.status).toBe("pending");
+
+    const [customerRow] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, created.id));
+    expect(customerRow?.primaryContactEmail).toBe("operations@juniper.test");
+
+    const [storeRow] = await db
+      .select({
+        customerId: stores.customerId,
+        priceBookId: stores.priceBookId,
+        locationCode: locations.code,
+      })
+      .from(stores)
+      .innerJoin(locations, eq(locations.id, stores.locationId))
+      .where(eq(stores.customerId, created.id));
+    expect(storeRow).toMatchObject({
+      customerId: created.id,
+      priceBookId,
+      locationCode: "JMG-01",
+    });
+
+    const [userRow] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, "taylor@juniper.test"));
+    expect(userRow?.isActive).toBe(false);
+
+    const [invitationRow] = await db
+      .select()
+      .from(customerInvitations)
+      .where(eq(customerInvitations.customerId, created.id));
+    expect(invitationRow?.userId).toBe(userRow?.id);
+    expect(invitationRow?.deliveryRequested).toBe(true);
+    expect(invitationRow?.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+
+    const [roleAssignment] = await db
+      .select()
+      .from(userRoles)
+      .where(eq(userRoles.userId, userRow!.id));
+    const [locationAssignment] = await db
+      .select()
+      .from(userLocationAccess)
+      .where(eq(userLocationAccess.userId, userRow!.id));
+    const [hqLocationAssignment] = await db
+      .select()
+      .from(userLocationAccess)
+      .where(
+        and(
+          eq(userLocationAccess.userId, hq.userId),
+          eq(userLocationAccess.locationId, created.location.id),
+        ),
+      );
+    expect(roleAssignment).toBeDefined();
+    expect(locationAssignment?.locationId).toBe(created.location.id);
+    expect(hqLocationAssignment).toBeDefined();
+
+    const workspaceResponse = await app.inject({
+      method: "GET",
+      url: "/api/customers",
+      headers: auth(hq),
+    });
+    expect(workspaceResponse.statusCode).toBe(200);
+    expect(
+      workspaceResponse
+        .json()
+        .items.some((item: { id: string }) => item.id === created.id),
+    ).toBe(true);
+    expect(workspaceResponse.json().metrics.pendingInvitations).toBeGreaterThan(0);
+  });
+
+  it("does not create a partial account when a uniqueness check fails", async () => {
+    const optionsResponse = await app.inject({
+      method: "GET",
+      url: "/api/customers/setup-options",
+      headers: auth(hq),
+    });
+    const options = optionsResponse.json();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/customers",
+      headers: auth(hq),
+      payload: {
+        businessName: "Duplicate Juniper",
+        accountCode: "JMG-01",
+        businessType: "Independent retailer",
+        contactEmail: "other@juniper.test",
+        locationName: "Second Store",
+        address: "1 Main Street",
+        city: "Boulder",
+        state: "CO",
+        postalCode: "80301",
+        timezone: "America/Denver",
+        warehouseId: options.warehouses[0].id,
+        priceBookId: options.priceBooks[0].id,
+        orderMinimum: "100.0000",
+        paymentTerms: "Net 30",
+        deliveryDays: ["Monday"],
+        inviteName: "Other Manager",
+        inviteEmail: "other-manager@juniper.test",
+        inviteRole: "store_manager",
+        sendWelcome: false,
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    const [partialUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, "other-manager@juniper.test"));
+    expect(partialUser).toBeUndefined();
   });
 });
 

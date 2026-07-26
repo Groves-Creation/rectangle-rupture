@@ -84,6 +84,119 @@ export const MeResponseSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Customers
+// ---------------------------------------------------------------------------
+
+export const DeliveryDaySchema = z.enum([
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+]);
+
+export const CustomerStatusSchema = z.enum(["active", "invite_pending"]);
+
+export const CreateCustomerSchema = z.object({
+  businessName: z.string().trim().min(1).max(160),
+  accountCode: z
+    .string()
+    .trim()
+    .min(2)
+    .max(12)
+    .regex(/^[A-Z0-9-]+$/, "Account code may contain only A-Z, 0-9, and hyphens"),
+  businessType: z.string().trim().min(1).max(80),
+  contactEmail: z.string().trim().email().max(254),
+  contactPhone: z.string().trim().max(40).optional(),
+  locationName: z.string().trim().min(1).max(160),
+  address: z.string().trim().min(1).max(200),
+  city: z.string().trim().min(1).max(100),
+  state: z.string().trim().length(2),
+  postalCode: z.string().trim().min(3).max(20),
+  timezone: z.string().trim().min(1).max(80),
+  warehouseId: z.string().uuid(),
+  priceBookId: z.string().uuid(),
+  orderMinimum: MoneySchema.refine((value) => !value.startsWith("-"), {
+    message: "Order minimum cannot be negative",
+  }),
+  paymentTerms: z.string().trim().min(1).max(40),
+  deliveryDays: z.array(DeliveryDaySchema).min(1),
+  orderNotes: z.string().trim().max(2000).optional(),
+  inviteName: z.string().trim().min(1).max(160),
+  inviteEmail: z.string().trim().email().max(254),
+  inviteRole: z.literal("store_manager"),
+  sendWelcome: z.boolean().default(true),
+});
+
+export const CustomerSummarySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  code: z.string(),
+  businessType: z.string(),
+  primaryContactEmail: z.string(),
+  status: CustomerStatusSchema,
+  createdAt: z.string(),
+  location: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    code: z.string(),
+  }),
+  manager: z
+    .object({
+      id: z.string().uuid(),
+      fullName: z.string(),
+      email: z.string(),
+    })
+    .nullable(),
+  invitation: z
+    .object({
+      id: z.string().uuid(),
+      status: z.enum(["pending", "accepted", "revoked", "expired"]),
+      deliveryRequested: z.boolean(),
+      expiresAt: z.string(),
+    })
+    .nullable(),
+  priceBookName: z.string().nullable(),
+  warehouseName: z.string().nullable(),
+  orderMinimum: MoneySchema,
+  paymentTerms: z.string(),
+  deliveryDays: z.array(DeliveryDaySchema),
+});
+
+export const CustomerWorkspaceResponseSchema = z.object({
+  items: z.array(CustomerSummarySchema),
+  metrics: z.object({
+    activeCustomers: z.number().int().nonnegative(),
+    pendingInvitations: z.number().int().nonnegative(),
+    totalLocations: z.number().int().nonnegative(),
+  }),
+});
+
+export const CustomerSetupOptionsSchema = z.object({
+  warehouses: z.array(
+    z.object({
+      id: z.string().uuid(),
+      code: z.string(),
+      name: z.string(),
+    }),
+  ),
+  priceBooks: z.array(
+    z.object({
+      id: z.string().uuid(),
+      code: z.string(),
+      name: z.string(),
+      isDefault: z.boolean(),
+    }),
+  ),
+});
+
+export const CreateCustomerResponseSchema = z.object({
+  customer: CustomerSummarySchema,
+});
+
+// ---------------------------------------------------------------------------
 // Catalog
 // ---------------------------------------------------------------------------
 
@@ -320,3 +433,6 @@ export type CartResponse = z.infer<typeof CartResponseSchema>;
 export type OrderSummary = z.infer<typeof OrderSummarySchema>;
 export type OrderDetail = z.infer<typeof OrderDetailSchema>;
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
+export type CreateCustomer = z.infer<typeof CreateCustomerSchema>;
+export type CustomerSummary = z.infer<typeof CustomerSummarySchema>;
+export type CustomerWorkspaceResponse = z.infer<typeof CustomerWorkspaceResponseSchema>;

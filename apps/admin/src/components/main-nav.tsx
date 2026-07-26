@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const LINKS = [
   { href: "/orders", label: "Orders" },
   { href: "/products", label: "Products" },
+  { href: "/customers", label: "Customers" },
 ] as const;
 
 export function MainNav() {

@@ -11,6 +11,7 @@ import {
   products,
   productVariants,
   stores,
+  locations,
 } from "@lit/database";
 import { ApiError } from "../../lib/errors.js";
 
@@ -31,15 +32,33 @@ export async function resolveStoreWarehouse(db: Database, storeId: string) {
   return store.warehouseId;
 }
 
-async function resolveDefaultPriceBook(db: Database) {
-  const [book] = await db
-    .select({ id: priceBooks.id })
-    .from(priceBooks)
-    .where(eq(priceBooks.isDefault, true))
+export async function resolveStorePriceBook(db: Database, storeId: string) {
+  const [store] = await db
+    .select({
+      priceBookId: stores.priceBookId,
+      organizationId: locations.organizationId,
+    })
+    .from(stores)
+    .innerJoin(locations, eq(locations.id, stores.locationId))
+    .where(eq(stores.locationId, storeId))
     .limit(1);
 
-  if (!book) throw ApiError.notFound("No default price book configured");
-  return book.id;
+  if (!store) throw ApiError.notFound("Store not found");
+  if (store.priceBookId) return store.priceBookId;
+
+  const [fallback] = await db
+    .select({ id: priceBooks.id })
+    .from(priceBooks)
+    .where(
+      and(
+        eq(priceBooks.organizationId, store.organizationId),
+        eq(priceBooks.isDefault, true),
+      ),
+    )
+    .limit(1);
+
+  if (!fallback) throw ApiError.notFound("No price book configured for this store");
+  return fallback.id;
 }
 
 /** Case pack rows for a variant, keyed by unit type. */
@@ -67,7 +86,7 @@ export interface CatalogQuery {
 
 export async function listCatalog(db: Database, query: CatalogQuery) {
   const warehouseId = await resolveStoreWarehouse(db, query.storeId);
-  const priceBookId = await resolveDefaultPriceBook(db);
+  const priceBookId = await resolveStorePriceBook(db, query.storeId);
 
   const filters = [eq(productVariants.isActive, true), eq(products.isActive, true)];
 

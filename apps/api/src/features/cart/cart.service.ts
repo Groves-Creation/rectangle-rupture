@@ -6,14 +6,16 @@ import {
   casePacks,
   inventoryBalances,
   priceBookItems,
-  priceBooks,
   productVariants,
   products,
   stores,
 } from "@lit/database";
 import { ApiError } from "../../lib/errors.js";
 import { addMoney, compareMoney, multiplyMoney, ZERO_MONEY } from "../../lib/money.js";
-import { resolveStoreWarehouse } from "../catalog/catalog.service.js";
+import {
+  resolveStorePriceBook,
+  resolveStoreWarehouse,
+} from "../catalog/catalog.service.js";
 
 /** Finds or creates the active cart for a (store, user) pair. */
 export async function getOrCreateCart(db: Database, storeId: string, userId: string) {
@@ -41,12 +43,7 @@ export async function getOrCreateCart(db: Database, storeId: string, userId: str
 export async function buildCartResponse(db: Database, storeId: string, userId: string) {
   const cart = await getOrCreateCart(db, storeId, userId);
   const warehouseId = await resolveStoreWarehouse(db, storeId);
-
-  const [priceBook] = await db
-    .select({ id: priceBooks.id })
-    .from(priceBooks)
-    .where(eq(priceBooks.isDefault, true))
-    .limit(1);
+  const priceBookId = await resolveStorePriceBook(db, storeId);
 
   const rows = await db
     .select({
@@ -70,7 +67,7 @@ export async function buildCartResponse(db: Database, storeId: string, userId: s
       priceBookItems,
       and(
         eq(priceBookItems.productVariantId, cartLines.productVariantId),
-        eq(priceBookItems.priceBookId, priceBook?.id ?? sql`NULL`),
+        eq(priceBookItems.priceBookId, priceBookId),
       ),
     )
     .leftJoin(

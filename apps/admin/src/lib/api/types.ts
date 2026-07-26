@@ -86,6 +86,77 @@ export interface MeResponse {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Customers                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export type DeliveryDay =
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday";
+
+export interface CustomerSummary {
+  id: string;
+  name: string;
+  code: string;
+  businessType: string;
+  primaryContactEmail: string;
+  status: "active" | "invite_pending";
+  createdAt: IsoDateTime;
+  location: {
+    id: string;
+    name: string;
+    city: string | null;
+    state: string | null;
+    code: string;
+  };
+  manager: {
+    id: string;
+    fullName: string;
+    email: string;
+  } | null;
+  invitation: {
+    id: string;
+    status: "pending" | "accepted" | "revoked" | "expired";
+    deliveryRequested: boolean;
+    expiresAt: IsoDateTime;
+  } | null;
+  priceBookName: string | null;
+  warehouseName: string | null;
+  orderMinimum: Money;
+  paymentTerms: string;
+  deliveryDays: DeliveryDay[];
+}
+
+export interface CustomerWorkspaceResponse {
+  items: CustomerSummary[];
+  metrics: {
+    activeCustomers: number;
+    pendingInvitations: number;
+    totalLocations: number;
+  };
+}
+
+export interface CustomerSetupOptions {
+  warehouses: Array<{
+    id: string;
+    code: string;
+    name: string;
+  }>;
+  priceBooks: Array<{
+    id: string;
+    code: string;
+    name: string;
+    isDefault: boolean;
+  }>;
+}
+
+export interface CreateCustomerResponse {
+  customer: CustomerSummary;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Catalog                                                                    */
 /* -------------------------------------------------------------------------- */
 
