@@ -18,6 +18,7 @@ import { authRoutes } from "./features/auth/auth.routes.js";
 import { catalogRoutes } from "./features/catalog/catalog.routes.js";
 import { cartRoutes } from "./features/cart/cart.routes.js";
 import { orderRoutes } from "./features/orders/orders.routes.js";
+import { customerRoutes } from "./features/customers/customers.routes.js";
 
 export async function buildServer() {
   const app = Fastify({
@@ -97,6 +98,7 @@ export async function buildServer() {
   await app.register(catalogRoutes, { prefix: "/api/catalog" });
   await app.register(cartRoutes, { prefix: "/api/cart" });
   await app.register(orderRoutes, { prefix: "/api/orders" });
+  await app.register(customerRoutes, { prefix: "/api/customers" });
 
   return app;
 }

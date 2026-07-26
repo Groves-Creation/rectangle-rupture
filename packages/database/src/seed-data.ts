@@ -1,5 +1,5 @@
 import { hash } from "@node-rs/argon2";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import type { Database } from "./client.js";
 import { recordMovement } from "./inventory/record-movement.js";
 import {
@@ -7,6 +7,7 @@ import {
   carts,
   casePacks,
   categories,
+  customers,
   locations,
   organizations,
   permissions,
@@ -117,29 +118,65 @@ export async function seedDatabase(db: Database, options: { quiet?: boolean } = 
       })
       .returning();
 
+    const [customer1, customer2] = await tx
+      .insert(customers)
+      .values([
+        {
+          organizationId: org!.id,
+          name: "Downtown",
+          code: "STR-001",
+          businessType: "Independent retailer",
+          primaryContactEmail: "manager@lit.test",
+          paymentTerms: "Net 30",
+          status: "active",
+        },
+        {
+          organizationId: org!.id,
+          name: "Riverside",
+          code: "STR-002",
+          businessType: "Independent retailer",
+          primaryContactEmail: "manager2@lit.test",
+          paymentTerms: "Net 30",
+          status: "active",
+        },
+      ])
+      .returning();
+
     await tx.insert(stores).values([
       {
         locationId: store1!.id,
+        customerId: customer1!.id,
         defaultWarehouseId: warehouseLoc!.id,
+        priceBookId: priceBook!.id,
         orderMinimum: "100.0000",
       },
       {
         locationId: store2!.id,
+        customerId: customer2!.id,
         defaultWarehouseId: warehouseLoc!.id,
+        priceBookId: priceBook!.id,
         orderMinimum: "100.0000",
       },
     ]);
 
     // --- roles and permissions ------------------------------------------------
-    const permissionRows = await tx
+    const permissionSpecs = [
+      { code: "catalog.read", description: "Browse the product catalog" },
+      { code: "orders.create", description: "Submit orders for a store" },
+      { code: "orders.read", description: "View orders" },
+      { code: "orders.approve", description: "Approve or reject submitted orders" },
+      { code: "customers.manage", description: "Create and view customer accounts" },
+    ];
+
+    await tx
       .insert(permissions)
-      .values([
-        { code: "catalog.read", description: "Browse the product catalog" },
-        { code: "orders.create", description: "Submit orders for a store" },
-        { code: "orders.read", description: "View orders" },
-        { code: "orders.approve", description: "Approve or reject submitted orders" },
-      ])
-      .returning();
+      .values(permissionSpecs)
+      .onConflictDoNothing();
+
+    const permissionRows = await tx
+      .select()
+      .from(permissions)
+      .where(inArray(permissions.code, permissionSpecs.map((permission) => permission.code)));
 
     const permByCode = new Map(permissionRows.map((p) => [p.code, p.id]));
 
@@ -160,6 +197,7 @@ export async function seedDatabase(db: Database, options: { quiet?: boolean } = 
       { roleId: hqAdminRole!.id, permissionId: permByCode.get("catalog.read")! },
       { roleId: hqAdminRole!.id, permissionId: permByCode.get("orders.read")! },
       { roleId: hqAdminRole!.id, permissionId: permByCode.get("orders.approve")! },
+      { roleId: hqAdminRole!.id, permissionId: permByCode.get("customers.manage")! },
     ]);
 
     // --- users ----------------------------------------------------------------

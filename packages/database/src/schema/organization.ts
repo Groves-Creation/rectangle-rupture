@@ -1,5 +1,6 @@
 import { boolean, index, pgTable, text, time, unique, uuid } from "drizzle-orm/pg-core";
 import { locationTypeEnum, money, primaryId, timestamps } from "./_shared.js";
+import { priceBooks } from "./pricing.js";
 
 export const organizations = pgTable("organizations", {
   id: primaryId(),
@@ -8,6 +9,29 @@ export const organizations = pgTable("organizations", {
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps(),
 });
+
+export const customers = pgTable(
+  "customers",
+  {
+    id: primaryId(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    code: text("code").notNull(),
+    businessType: text("business_type").notNull(),
+    primaryContactEmail: text("primary_contact_email").notNull(),
+    primaryContactPhone: text("primary_contact_phone"),
+    paymentTerms: text("payment_terms").notNull().default("Net 30"),
+    status: text("status").notNull().default("pending_invitation"),
+    isActive: boolean("is_active").notNull().default(true),
+    ...timestamps(),
+  },
+  (t) => [
+    unique("customers_org_code_unique").on(t.organizationId, t.code),
+    index("customers_org_created_idx").on(t.organizationId, t.createdAt),
+  ],
+);
 
 export const regions = pgTable(
   "regions",
@@ -68,11 +92,19 @@ export const stores = pgTable("stores", {
   locationId: uuid("location_id")
     .primaryKey()
     .references(() => locations.id, { onDelete: "cascade" }),
+  customerId: uuid("customer_id")
+    .notNull()
+    .references(() => customers.id, { onDelete: "restrict" }),
   /** Warehouse this store orders from by default. */
   defaultWarehouseId: uuid("default_warehouse_id").references(() => locations.id, {
     onDelete: "set null",
   }),
+  priceBookId: uuid("price_book_id").references(() => priceBooks.id, {
+    onDelete: "set null",
+  }),
   orderMinimum: money("order_minimum").notNull().default("0"),
+  deliveryDays: text("delivery_days").array().notNull().default([]),
+  fulfillmentNotes: text("fulfillment_notes"),
   /** Populated in Phase 4. Present now so the mapping seam is visible. */
   cloverMerchantId: text("clover_merchant_id"),
   ...timestamps(),

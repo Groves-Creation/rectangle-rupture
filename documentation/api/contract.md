@@ -69,6 +69,100 @@ and returns 401.
 
 ---
 
+## Customers
+
+All customer endpoints require `customers.manage`. Customer creation is a
+single database transaction: the customer, primary store, inactive invited
+user, role and location assignments, invitation, and audit entry either all
+commit or all roll back.
+
+### GET /api/customers
+
+Returns the authenticated organization’s customer workspace.
+
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "name": "Juniper Market Group",
+      "code": "JMG-01",
+      "businessType": "Independent retailer",
+      "primaryContactEmail": "operations@juniper.test",
+      "status": "invite_pending",
+      "createdAt": "2026-07-26T07:00:00.000Z",
+      "location": {
+        "id": "uuid",
+        "name": "Pearl Street",
+        "city": "Boulder",
+        "state": "CO",
+        "code": "JMG-01"
+      },
+      "manager": {
+        "id": "uuid",
+        "fullName": "Taylor Morgan",
+        "email": "taylor@juniper.test"
+      },
+      "invitation": {
+        "id": "uuid",
+        "status": "pending",
+        "deliveryRequested": true,
+        "expiresAt": "2026-08-02T07:00:00.000Z"
+      },
+      "priceBookName": "Standard Store Transfer",
+      "warehouseName": "Main DC",
+      "orderMinimum": "250.0000",
+      "paymentTerms": "Net 30",
+      "deliveryDays": ["Tuesday", "Friday"]
+    }
+  ],
+  "metrics": {
+    "activeCustomers": 2,
+    "pendingInvitations": 1,
+    "totalLocations": 3
+  }
+}
+```
+
+### GET /api/customers/setup-options
+
+Returns active warehouses and price books belonging to the authenticated
+organization. IDs from this response are required by customer creation.
+
+### POST /api/customers
+
+```json
+{
+  "businessName": "Juniper Market Group",
+  "accountCode": "JMG-01",
+  "businessType": "Independent retailer",
+  "contactEmail": "operations@juniper.test",
+  "contactPhone": "(303) 555-0142",
+  "locationName": "Pearl Street",
+  "address": "1420 Pearl Street",
+  "city": "Boulder",
+  "state": "CO",
+  "postalCode": "80302",
+  "timezone": "America/Denver",
+  "warehouseId": "uuid",
+  "priceBookId": "uuid",
+  "orderMinimum": "250.0000",
+  "paymentTerms": "Net 30",
+  "deliveryDays": ["Tuesday", "Friday"],
+  "orderNotes": "Receiving entrance on Walnut Street",
+  "inviteName": "Taylor Morgan",
+  "inviteEmail": "taylor@juniper.test",
+  "inviteRole": "store_manager",
+  "sendWelcome": true
+}
+```
+
+Returns `201 { "customer": /* customer summary */ }`. The invited user is
+inactive until invitation acceptance. Only a SHA-256 hash of the opaque
+invitation token is stored.
+
+---
+
 ## Catalog
 
 ### GET /api/catalog?storeId=<uuid>&search=<string>&categoryId=<uuid>&limit=50&offset=0
