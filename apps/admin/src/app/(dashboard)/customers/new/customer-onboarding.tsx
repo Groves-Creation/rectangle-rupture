@@ -20,9 +20,10 @@ import {
   Warehouse,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useTransition } from "react";
 import type { ReactNode } from "react";
 
+import { ApiErrorNotice } from "@/components/api-error-notice";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -34,9 +35,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { createCustomerAction } from "@/lib/actions/customers";
+import type { CustomerSetupOptions, CustomerSummary, DeliveryDay } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
-
-const STORAGE_KEY = "lit-customer-onboarding-draft";
 
 const steps = [
   {
@@ -77,19 +78,20 @@ type Draft = {
   state: string;
   postalCode: string;
   timezone: string;
-  warehouse: string;
+  warehouseId: string;
   orderMinimum: string;
-  priceBook: string;
+  priceBookId: string;
   paymentTerms: string;
-  deliveryDays: string[];
+  deliveryDays: DeliveryDay[];
   orderNotes: string;
   inviteName: string;
   inviteEmail: string;
-  inviteRole: string;
+  inviteRole: "store_manager";
   sendWelcome: boolean;
 };
 
-const initialDraft: Draft = {
+function createInitialDraft(setupOptions: CustomerSetupOptions): Draft {
+  return {
   businessName: "",
   accountCode: "",
   businessType: "Independent retailer",
@@ -101,54 +103,43 @@ const initialDraft: Draft = {
   state: "CO",
   postalCode: "",
   timezone: "America/Denver",
-  warehouse: "Denver Distribution Center",
+  warehouseId: setupOptions.warehouses[0]?.id ?? "",
   orderMinimum: "250.00",
-  priceBook: "Standard wholesale",
+  priceBookId:
+    setupOptions.priceBooks.find((priceBook) => priceBook.isDefault)?.id ??
+    setupOptions.priceBooks[0]?.id ??
+    "",
   paymentTerms: "Net 30",
   deliveryDays: ["Tuesday", "Friday"],
   orderNotes: "",
   inviteName: "",
   inviteEmail: "",
-  inviteRole: "Store manager",
+  inviteRole: "store_manager",
   sendWelcome: true,
-};
+  };
+}
 
 const fieldClass =
   "h-10 border-slate-200 bg-white shadow-none focus-visible:ring-slate-900";
 const selectClass =
   "flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10";
 
-export function CustomerOnboarding() {
+export function CustomerOnboarding({
+  setupOptions,
+}: {
+  setupOptions: CustomerSetupOptions;
+}) {
+  const initialDraft = createInitialDraft(setupOptions);
   const [activeStep, setActiveStep] = useState(0);
   const [draft, setDraft] = useState<Draft>(initialDraft);
-  const [loaded, setLoaded] = useState(false);
-  const [completed, setCompleted] = useState(false);
+  const [launchedCustomer, setLaunchedCustomer] =
+    useState<CustomerSummary | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      try {
-        const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          setDraft({
-            ...initialDraft,
-            ...(JSON.parse(stored) as Partial<Draft>),
-          });
-        }
-      } catch {
-        window.localStorage.removeItem(STORAGE_KEY);
-      } finally {
-        setLoaded(true);
-      }
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
-    if (!loaded || completed) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-  }, [completed, draft, loaded]);
+  const [submitError, setSubmitError] = useState<{
+    code: string;
+    message: string;
+  } | null>(null);
+  const [isLaunching, startLaunch] = useTransition();
 
   const progress = ((activeStep + 1) / steps.length) * 100;
   const currentStep = steps[activeStep] ?? steps[0];
@@ -198,9 +189,11 @@ export function CustomerOnboarding() {
       requireField("address", "Street address");
       requireField("city", "City");
       requireField("postalCode", "ZIP code");
+      requireField("warehouseId", "Fulfillment warehouse");
     }
     if (activeStep === 2) {
       requireField("orderMinimum", "Order minimum");
+      requireField("priceBookId", "Price book");
       if (draft.deliveryDays.length === 0) {
         nextErrors.deliveryDays = "Choose at least one delivery day";
       }
@@ -223,8 +216,15 @@ export function CustomerOnboarding() {
   const goNext = () => {
     if (!validateCurrentStep()) return;
     if (activeStep === steps.length - 1) {
-      window.localStorage.removeItem(STORAGE_KEY);
-      setCompleted(true);
+      setSubmitError(null);
+      startLaunch(async () => {
+        const result = await createCustomerAction(draft);
+        if (!result.ok) {
+          setSubmitError(result.error);
+          return;
+        }
+        setLaunchedCustomer(result.data.customer);
+      });
       return;
     }
     setActiveStep((step) => step + 1);
@@ -232,18 +232,17 @@ export function CustomerOnboarding() {
   };
 
   const startOver = () => {
-    window.localStorage.removeItem(STORAGE_KEY);
-    setDraft(initialDraft);
+    setDraft(createInitialDraft(setupOptions));
     setActiveStep(0);
-    setCompleted(false);
+    setLaunchedCustomer(null);
+    setSubmitError(null);
     setErrors({});
   };
 
-  if (completed) {
+  if (launchedCustomer) {
     return (
       <CompletionState
-        draft={draft}
-        locationLabel={locationLabel}
+        customer={launchedCustomer}
         onStartOver={startOver}
       />
     );
@@ -269,8 +268,8 @@ export function CustomerOnboarding() {
             </p>
           </div>
           <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 shadow-sm sm:flex">
-            <Check className="size-3.5 text-emerald-600" aria-hidden="true" />
-            Draft saved
+            <ShieldCheck className="size-3.5 text-emerald-600" aria-hidden="true" />
+            Stored only when launched
           </div>
         </div>
 
@@ -383,18 +382,32 @@ export function CustomerOnboarding() {
                 />
               ) : null}
               {activeStep === 1 ? (
-                <LocationStep draft={draft} errors={errors} update={update} />
+                <LocationStep
+                  draft={draft}
+                  errors={errors}
+                  setupOptions={setupOptions}
+                  update={update}
+                />
               ) : null}
               {activeStep === 2 ? (
-                <OrderingStep draft={draft} errors={errors} update={update} />
+                <OrderingStep
+                  draft={draft}
+                  errors={errors}
+                  setupOptions={setupOptions}
+                  update={update}
+                />
               ) : null}
               {activeStep === 3 ? (
                 <AccessStep
                   draft={draft}
                   errors={errors}
                   locationLabel={locationLabel}
+                  setupOptions={setupOptions}
                   update={update}
                 />
+              ) : null}
+              {submitError ? (
+                <ApiErrorNotice error={submitError} className="mt-6" />
               ) : null}
             </CardContent>
 
@@ -419,11 +432,12 @@ export function CustomerOnboarding() {
                 <Button
                   type="button"
                   onClick={goNext}
+                  disabled={isLaunching}
                   className="min-w-28 bg-slate-950 hover:bg-slate-800"
                 >
                   {activeStep === steps.length - 1 ? (
                     <>
-                      Launch account
+                      {isLaunching ? "Launching…" : "Launch account"}
                       <Sparkles aria-hidden="true" />
                     </>
                   ) : (
@@ -569,7 +583,12 @@ function AccountStep({
   );
 }
 
-function LocationStep({ draft, errors, update }: StepProps) {
+function LocationStep({
+  draft,
+  errors,
+  setupOptions,
+  update,
+}: StepProps & { setupOptions: CustomerSetupOptions }) {
   return (
     <div className="grid gap-6">
       <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
@@ -659,15 +678,23 @@ function LocationStep({ draft, errors, update }: StepProps) {
       </div>
 
       <div className="grid gap-5 border-t border-slate-100 pt-6 sm:grid-cols-2">
-        <Field label="Fulfillment warehouse" htmlFor="warehouse">
+        <Field
+          label="Fulfillment warehouse"
+          htmlFor="warehouseId"
+          error={errors.warehouseId}
+        >
           <select
-            id="warehouse"
+            id="warehouseId"
             className={selectClass}
-            value={draft.warehouse}
-            onChange={(event) => update("warehouse", event.target.value)}
+            value={draft.warehouseId}
+            onChange={(event) => update("warehouseId", event.target.value)}
+            aria-invalid={Boolean(errors.warehouseId)}
           >
-            <option>Denver Distribution Center</option>
-            <option>Newark Main DC</option>
+            {setupOptions.warehouses.map((warehouse) => (
+              <option key={warehouse.id} value={warehouse.id}>
+                {warehouse.code} — {warehouse.name}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Location timezone" htmlFor="timezone">
@@ -688,29 +715,41 @@ function LocationStep({ draft, errors, update }: StepProps) {
   );
 }
 
-function OrderingStep({ draft, errors, update }: StepProps) {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const dayNames: Record<string, string> = {
-    Mon: "Monday",
-    Tue: "Tuesday",
-    Wed: "Wednesday",
-    Thu: "Thursday",
-    Fri: "Friday",
-  };
+function OrderingStep({
+  draft,
+  errors,
+  setupOptions,
+  update,
+}: StepProps & { setupOptions: CustomerSetupOptions }) {
+  const days = [
+    { short: "Mon", full: "Monday" },
+    { short: "Tue", full: "Tuesday" },
+    { short: "Wed", full: "Wednesday" },
+    { short: "Thu", full: "Thursday" },
+    { short: "Fri", full: "Friday" },
+  ] as const satisfies ReadonlyArray<{ short: string; full: DeliveryDay }>;
 
   return (
     <div className="grid gap-6">
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Price book" htmlFor="priceBook">
+        <Field
+          label="Price book"
+          htmlFor="priceBookId"
+          error={errors.priceBookId}
+        >
           <select
-            id="priceBook"
+            id="priceBookId"
             className={selectClass}
-            value={draft.priceBook}
-            onChange={(event) => update("priceBook", event.target.value)}
+            value={draft.priceBookId}
+            onChange={(event) => update("priceBookId", event.target.value)}
+            aria-invalid={Boolean(errors.priceBookId)}
           >
-            <option>Standard wholesale</option>
-            <option>Regional partner</option>
-            <option>Key account</option>
+            {setupOptions.priceBooks.map((priceBook) => (
+              <option key={priceBook.id} value={priceBook.id}>
+                {priceBook.name}
+                {priceBook.isDefault ? " (default)" : ""}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Payment terms" htmlFor="paymentTerms">
@@ -761,19 +800,18 @@ function OrderingStep({ draft, errors, update }: StepProps) {
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {days.map((day) => {
-            const fullDay = dayNames[day]!;
-            const selected = draft.deliveryDays.includes(fullDay);
+            const selected = draft.deliveryDays.includes(day.full);
             return (
               <button
-                key={day}
+                key={day.full}
                 type="button"
                 aria-pressed={selected}
                 onClick={() =>
                   update(
                     "deliveryDays",
                     selected
-                      ? draft.deliveryDays.filter((item) => item !== fullDay)
-                      : [...draft.deliveryDays, fullDay],
+                      ? draft.deliveryDays.filter((item) => item !== day.full)
+                      : [...draft.deliveryDays, day.full],
                   )
                 }
                 className={cn(
@@ -783,7 +821,7 @@ function OrderingStep({ draft, errors, update }: StepProps) {
                     : "border-slate-200 bg-white text-slate-600 hover:border-slate-400",
                 )}
               >
-                {day}
+                {day.short}
               </button>
             );
           })}
@@ -815,8 +853,21 @@ function AccessStep({
   draft,
   errors,
   locationLabel,
+  setupOptions,
   update,
-}: StepProps & { locationLabel: string }) {
+}: StepProps & {
+  locationLabel: string;
+  setupOptions: CustomerSetupOptions;
+}) {
+  const warehouseName =
+    setupOptions.warehouses.find(
+      (warehouse) => warehouse.id === draft.warehouseId,
+    )?.name ?? "Not set";
+  const priceBookName =
+    setupOptions.priceBooks.find(
+      (priceBook) => priceBook.id === draft.priceBookId,
+    )?.name ?? "Not set";
+
   return (
     <div className="grid gap-6">
       <div className="grid gap-5 sm:grid-cols-2">
@@ -856,11 +907,9 @@ function AccessStep({
           id="inviteRole"
           className={selectClass}
           value={draft.inviteRole}
-          onChange={(event) => update("inviteRole", event.target.value)}
+          onChange={() => update("inviteRole", "store_manager")}
         >
-          <option>Store manager</option>
-          <option>Order manager</option>
-          <option>View only</option>
+          <option value="store_manager">Store manager</option>
         </select>
       </Field>
 
@@ -873,10 +922,11 @@ function AccessStep({
         />
         <span>
           <span className="block text-sm font-medium text-slate-950">
-            Send a welcome email when the account launches
+            Flag this invitation for welcome-email delivery
           </span>
           <span className="mt-1 block text-xs leading-5 text-slate-500">
-            Includes sign-in instructions and access to the ordering app.
+            Records the delivery request with the invitation for the email
+            delivery service.
           </span>
         </span>
       </label>
@@ -910,12 +960,12 @@ function AccessStep({
           <ReviewItem
             icon={Warehouse}
             label="Fulfilled by"
-            value={draft.warehouse}
+            value={warehouseName}
           />
           <ReviewItem
             icon={PackageCheck}
             label="Ordering"
-            value={`${draft.priceBook} · $${draft.orderMinimum} minimum`}
+            value={`${priceBookName} · $${draft.orderMinimum} minimum`}
           />
         </div>
       </div>
@@ -990,14 +1040,17 @@ function ReviewItem({
 }
 
 function CompletionState({
-  draft,
-  locationLabel,
+  customer,
   onStartOver,
 }: {
-  draft: Draft;
-  locationLabel: string;
+  customer: CustomerSummary;
   onStartOver: () => void;
 }) {
+  const locationLabel =
+    [customer.location.city, customer.location.state]
+      .filter(Boolean)
+      .join(", ") || customer.location.code;
+
   return (
     <div className="-my-8 flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-slate-50 px-4 py-12">
       <div className="w-full max-w-2xl">
@@ -1011,14 +1064,15 @@ function CompletionState({
               <PartyPopper className="size-7" />
             </span>
             <p className="relative mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">
-              Account launched
+              Account created
             </p>
             <h1 className="relative mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {draft.businessName} is ready to order.
+              {customer.name} is awaiting activation.
             </h1>
             <p className="relative mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-300">
-              The location, commercial rules, and customer access are all in
-              place. HQ can now track the account from the customer workspace.
+              The customer, store, commercial rules, manager access, and
+              invitation were committed together. Ordering opens when the
+              manager accepts the invitation.
             </p>
           </div>
 
@@ -1027,21 +1081,23 @@ function CompletionState({
               <LaunchFact
                 icon={Store}
                 label="Location"
-                value={draft.locationName}
+                value={customer.location.name}
                 detail={locationLabel}
               />
               <LaunchFact
                 icon={CircleDollarSign}
                 label="Terms"
-                value={draft.paymentTerms}
-                detail={`$${draft.orderMinimum} minimum`}
+                value={customer.paymentTerms}
+                detail={`${customer.orderMinimum} minimum`}
               />
               <LaunchFact
                 icon={Mail}
                 label="Access"
-                value={draft.inviteName}
+                value={customer.manager?.fullName ?? "Invited manager"}
                 detail={
-                  draft.sendWelcome ? "Welcome email ready" : "Invite not sent"
+                  customer.invitation?.deliveryRequested
+                    ? "Invitation delivery requested"
+                    : "Invitation created"
                 }
               />
             </div>
@@ -1053,11 +1109,12 @@ function CompletionState({
               />
               <div>
                 <p className="text-sm font-medium text-emerald-950">
-                  The first-order path is open
+                  Invitation is pending
                 </p>
                 <p className="mt-1 text-xs leading-5 text-emerald-800">
-                  {draft.inviteEmail} will be able to browse the assigned price
-                  book and order for {draft.locationName}.
+                  {customer.manager?.email ?? customer.primaryContactEmail} has
+                  scoped access to {customer.location.name}, but remains
+                  inactive until the invitation is accepted.
                 </p>
               </div>
             </div>

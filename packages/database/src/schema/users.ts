@@ -8,7 +8,7 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
-import { locations, organizations } from "./organization.js";
+import { customers, locations, organizations } from "./organization.js";
 import { primaryId, timestamps } from "./_shared.js";
 
 export const users = pgTable(
@@ -29,6 +29,37 @@ export const users = pgTable(
     ...timestamps(),
   },
   (t) => [index("users_org_idx").on(t.organizationId)],
+);
+
+export const customerInvitations = pgTable(
+  "customer_invitations",
+  {
+    id: primaryId(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    invitedByUserId: uuid("invited_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    email: text("email").notNull(),
+    roleCode: text("role_code").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    deliveryRequested: boolean("delivery_requested").notNull().default(true),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: "date" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+    ...timestamps(),
+  },
+  (t) => [
+    index("customer_invitations_customer_idx").on(t.customerId),
+    index("customer_invitations_email_idx").on(t.email),
+  ],
 );
 
 export const roles = pgTable(

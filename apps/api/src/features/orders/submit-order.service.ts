@@ -8,7 +8,6 @@ import {
   orderStatusHistory,
   orders,
   priceBookItems,
-  priceBooks,
   productVariants,
   products,
   stores,
@@ -17,7 +16,10 @@ import { ApiError } from "../../lib/errors.js";
 import { addMoney, compareMoney, multiplyMoney, ZERO_MONEY } from "../../lib/money.js";
 import { writeAuditLog } from "../../lib/audit.js";
 import { getOrderDetail } from "./orders.queries.js";
-import { resolveStoreWarehouse } from "../catalog/catalog.service.js";
+import {
+  resolveStorePriceBook,
+  resolveStoreWarehouse,
+} from "../catalog/catalog.service.js";
 
 /**
  * Submits the active cart as an order.
@@ -36,6 +38,7 @@ export async function submitOrder(
   meta: { ipAddress?: string },
 ) {
   const warehouseId = await resolveStoreWarehouse(db, input.storeId);
+  const priceBookId = await resolveStorePriceBook(db, input.storeId);
 
   const orderId = await db.transaction(async (tx) => {
     const [cart] = await tx
@@ -51,14 +54,6 @@ export async function submitOrder(
       .limit(1);
 
     if (!cart) throw ApiError.validation("No active cart for this store");
-
-    const [priceBook] = await tx
-      .select({ id: priceBooks.id })
-      .from(priceBooks)
-      .where(eq(priceBooks.isDefault, true))
-      .limit(1);
-
-    if (!priceBook) throw ApiError.notFound("No default price book configured");
 
     const lines = await tx
       .select({
@@ -81,7 +76,7 @@ export async function submitOrder(
         priceBookItems,
         and(
           eq(priceBookItems.productVariantId, cartLines.productVariantId),
-          eq(priceBookItems.priceBookId, priceBook.id),
+          eq(priceBookItems.priceBookId, priceBookId),
         ),
       )
       .leftJoin(
