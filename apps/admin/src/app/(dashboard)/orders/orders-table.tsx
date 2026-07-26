@@ -129,6 +129,9 @@ export function OrdersTable({ stores, initialData }: OrdersTableProps) {
     [],
   );
 
+  // TanStack Table returns intentionally unstable callbacks; React Compiler
+  // safely skips this component instead of memoizing stale table state.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: rows,
     columns,

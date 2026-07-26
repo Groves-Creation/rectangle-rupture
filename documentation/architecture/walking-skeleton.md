@@ -44,7 +44,7 @@ Git 2.52. Wi-Fi LAN IP `192.168.1.144`; Tailscale `100.88.157.98`.
 ## Scope boundary
 
 **In:** monorepo, docker-compose, DB schema + migrations + seed, auth, catalog, cart,
-order submit, HQ approve/reject, inventory allocation via ledger, audit log, order
+order submit, HQ adjust/approve/reject, inventory allocation via ledger, audit log, order
 status back to device, CI, one e2e test.
 
 **Explicitly out (follow-on):** barcode scanning, offline queue, pick waves, packing,
@@ -233,7 +233,7 @@ minimal — enough to close the loop, not the full spec §8 dashboard.
 - `/login` — server action, sets httpOnly cookie
 - `/orders` — TanStack Table, filter by store and status
 - `/orders/[id]` — line items with snapshot prices, status history timeline, and
-  **Approve / Reject** buttons
+  **Adjust / Approve / Reject** buttons
 - `/products` — read-only list of seeded catalog
 
 Product/user/pricing CRUD is follow-on work.
@@ -334,7 +334,7 @@ submit → approve → assert final status, allocation, ledger rows, and audit t
    migration → `recordMovement()` → seed
 3. `apps/api`: bootstrap, auth, then catalog → cart → orders → approve
 4. Vitest suite against the invariants — **stop and get these green before any UI**
-5. `apps/admin`: login, orders list, order detail, approve/reject
+5. `apps/admin`: login, orders list, order detail, adjust/approve/reject
 6. `apps/mobile`: scaffold + flavors + network config, then auth → catalog → cart →
    orders
 7. Run on the physical device, walk the full loop

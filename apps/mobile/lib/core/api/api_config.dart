@@ -19,6 +19,22 @@ abstract final class ApiConfig {
   static const Duration sendTimeout = Duration(seconds: 20);
 }
 
+/// Explicit development conveniences enabled only through build-time defines.
+///
+/// These default to off, so staging and production builds cannot silently
+/// inherit a local authentication bypass.
+abstract final class DevConfig {
+  static const bool autoLogin = bool.fromEnvironment('DEV_AUTO_LOGIN');
+  static const String email = String.fromEnvironment(
+    'DEV_AUTO_LOGIN_EMAIL',
+    defaultValue: 'manager@lit.test',
+  );
+  static const String password = String.fromEnvironment(
+    'DEV_AUTO_LOGIN_PASSWORD',
+    defaultValue: 'Password123!',
+  );
+}
+
 /// Every path used by the app, relative to [ApiConfig.baseUrl].
 abstract final class ApiPaths {
   static const String login = '/api/auth/login';

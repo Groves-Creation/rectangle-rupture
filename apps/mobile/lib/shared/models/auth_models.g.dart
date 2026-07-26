@@ -95,5 +95,5 @@ Map<String, dynamic> _$LoginRequestToJson(_LoginRequest instance) =>
     <String, dynamic>{
       'email': instance.email,
       'password': instance.password,
-      'deviceIdentifier': instance.deviceIdentifier,
+      'deviceIdentifier': ?instance.deviceIdentifier,
     };

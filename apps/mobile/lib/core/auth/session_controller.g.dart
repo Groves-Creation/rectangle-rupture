@@ -45,7 +45,7 @@ final class SessionControllerProvider
   SessionController create() => SessionController();
 }
 
-String _$sessionControllerHash() => r'536c937acb85991145e04e5ff70fb1e87571421e';
+String _$sessionControllerHash() => r'180819c5932010b0131f9b4a46d482707eb38592';
 
 /// Owns "who is signed in and where are they ordering from".
 ///

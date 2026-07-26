@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../api/api_config.dart';
 import '../../features/authentication/data/auth_repository.dart';
 import '../../features/authentication/domain/session_state.dart';
 import '../../shared/models/auth_models.dart';
@@ -32,7 +34,26 @@ class SessionController extends _$SessionController {
 
   Future<SessionState> _restore() async {
     final tokens = await ref.read(tokenStorageProvider).read();
-    if (tokens == null) return SessionState.signedOut;
+    if (tokens == null) {
+      debugPrint(
+        'Dev auto-login: enabled=${DevConfig.autoLogin}, '
+        'api=${ApiConfig.baseUrl}',
+      );
+      if (!DevConfig.autoLogin) return SessionState.signedOut;
+
+      try {
+        final session = await ref
+            .read(authRepositoryProvider)
+            .login(email: DevConfig.email, password: DevConfig.password);
+        await ref.read(tokenStorageProvider).write(session.tokens);
+        return _withStoreSelection(user: session.user, stores: session.stores);
+      } on Failure catch (failure) {
+        debugPrint('Dev auto-login failed: $failure');
+        // Keep the login screen available when the local development API is
+        // offline or has not been seeded yet.
+        return SessionState.signedOut;
+      }
+    }
 
     try {
       final me = await ref.read(authRepositoryProvider).me();

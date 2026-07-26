@@ -1423,7 +1423,7 @@ $AuthUserCopyWith<$Res> get user {
 /// @nodoc
 mixin _$LoginRequest {
 
- String get email; String get password; String? get deviceIdentifier;
+ String get email; String get password;@JsonKey(includeIfNull: false) String? get deviceIdentifier;
 /// Create a copy of LoginRequest
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1456,7 +1456,7 @@ abstract mixin class $LoginRequestCopyWith<$Res>  {
   factory $LoginRequestCopyWith(LoginRequest value, $Res Function(LoginRequest) _then) = _$LoginRequestCopyWithImpl;
 @useResult
 $Res call({
- String email, String password, String? deviceIdentifier
+ String email, String password,@JsonKey(includeIfNull: false) String? deviceIdentifier
 });
 
 
@@ -1563,7 +1563,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String email,  String password,  String? deviceIdentifier)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String email,  String password, @JsonKey(includeIfNull: false)  String? deviceIdentifier)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _LoginRequest() when $default != null:
 return $default(_that.email,_that.password,_that.deviceIdentifier);case _:
@@ -1584,7 +1584,7 @@ return $default(_that.email,_that.password,_that.deviceIdentifier);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String email,  String password,  String? deviceIdentifier)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String email,  String password, @JsonKey(includeIfNull: false)  String? deviceIdentifier)  $default,) {final _that = this;
 switch (_that) {
 case _LoginRequest():
 return $default(_that.email,_that.password,_that.deviceIdentifier);case _:
@@ -1604,7 +1604,7 @@ return $default(_that.email,_that.password,_that.deviceIdentifier);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String email,  String password,  String? deviceIdentifier)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String email,  String password, @JsonKey(includeIfNull: false)  String? deviceIdentifier)?  $default,) {final _that = this;
 switch (_that) {
 case _LoginRequest() when $default != null:
 return $default(_that.email,_that.password,_that.deviceIdentifier);case _:
@@ -1619,12 +1619,12 @@ return $default(_that.email,_that.password,_that.deviceIdentifier);case _:
 @JsonSerializable()
 
 class _LoginRequest implements LoginRequest {
-  const _LoginRequest({required this.email, required this.password, this.deviceIdentifier});
+  const _LoginRequest({required this.email, required this.password, @JsonKey(includeIfNull: false) this.deviceIdentifier});
   factory _LoginRequest.fromJson(Map<String, dynamic> json) => _$LoginRequestFromJson(json);
 
 @override final  String email;
 @override final  String password;
-@override final  String? deviceIdentifier;
+@override@JsonKey(includeIfNull: false) final  String? deviceIdentifier;
 
 /// Create a copy of LoginRequest
 /// with the given fields replaced by the non-null parameter values.
@@ -1659,7 +1659,7 @@ abstract mixin class _$LoginRequestCopyWith<$Res> implements $LoginRequestCopyWi
   factory _$LoginRequestCopyWith(_LoginRequest value, $Res Function(_LoginRequest) _then) = __$LoginRequestCopyWithImpl;
 @override @useResult
 $Res call({
- String email, String password, String? deviceIdentifier
+ String email, String password,@JsonKey(includeIfNull: false) String? deviceIdentifier
 });
 
 

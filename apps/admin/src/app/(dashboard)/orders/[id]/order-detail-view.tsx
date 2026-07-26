@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  adjustOrderAction,
   approveOrderAction,
   getOrderAction,
   rejectOrderAction,
@@ -97,6 +98,19 @@ export function OrderDetailView({
     onSuccess: settle,
   });
 
+  const adjust = useMutation<
+    OrderDetail,
+    Error,
+    {
+      reason: string;
+      lines: Array<{ lineId: string; quantityOrdered: number }>;
+    }
+  >({
+    mutationFn: async ({ reason, lines }) =>
+      unwrap(await adjustOrderAction(orderId, reason, lines)),
+    onSuccess: settle,
+  });
+
   const reject = useMutation<OrderDetail, Error, string>({
     mutationFn: async (reason: string) =>
       unwrap(await rejectOrderAction(orderId, reason)),
@@ -104,7 +118,9 @@ export function OrderDetailView({
   });
 
   const mutationError =
-    toSerialized(approve.error) ?? toSerialized(reject.error);
+    toSerialized(adjust.error) ??
+    toSerialized(approve.error) ??
+    toSerialized(reject.error);
 
   const actionable = isActionableOrderStatus(order.status);
   const statusLabel = orderStatusLabel(order.status);
@@ -118,7 +134,15 @@ export function OrderDetailView({
     [order.statusHistory],
   );
 
-  const hasShortfall = order.lines.some((line) => !line.fullyAllocated);
+  const allocationRecorded = ![
+    "submitted",
+    "under_review",
+    "approved",
+    "rejected",
+    "cancelled",
+  ].includes(order.status);
+  const hasShortfall =
+    allocationRecorded && order.lines.some((line) => !line.fullyAllocated);
 
   return (
     <div className="flex flex-col gap-6">
@@ -139,8 +163,11 @@ export function OrderDetailView({
         <OrderActions
           actionable={actionable}
           statusLabel={statusLabel}
+          lines={order.lines}
+          isAdjusting={adjust.isPending}
           isApproving={approve.isPending}
           isRejecting={reject.isPending}
+          onAdjust={(input) => adjust.mutate(input)}
           onApprove={() => approve.mutate()}
           onReject={(reason) => reject.mutate(reason)}
         />
@@ -252,14 +279,14 @@ export function OrderDetailView({
                     <TableCell className="text-right tabular-nums">
                       <span
                         className={
-                          line.fullyAllocated
+                          line.fullyAllocated || !allocationRecorded
                             ? undefined
                             : "font-medium text-amber-700 dark:text-amber-400"
                         }
                       >
                         {formatQuantity(line.quantityAllocated)}
                       </span>
-                      {line.fullyAllocated ? null : (
+                      {!allocationRecorded || line.fullyAllocated ? null : (
                         <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">
                           (short)
                         </span>

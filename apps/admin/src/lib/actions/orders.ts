@@ -16,6 +16,11 @@ export interface ListOrdersParams {
   offset?: number | undefined;
 }
 
+export interface AdjustOrderLineInput {
+  lineId: string;
+  quantityOrdered: number;
+}
+
 /**
  * `POST /api/orders` documents its 201 body as `{ "order": ... }` while
  * `GET /api/orders/:id`, approve and reject are documented as returning the
@@ -79,6 +84,37 @@ export async function approveOrderAction(
         method: "POST",
         body: trimmed === "" ? {} : { notes: trimmed },
       },
+    );
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true, data: unwrapOrder(data) };
+  } catch (error) {
+    if (isNextControlFlowError(error)) throw error;
+    return { ok: false, error: serializeError(error) };
+  }
+}
+
+/** Updates or removes lines while an order is still awaiting an HQ decision. */
+export async function adjustOrderAction(
+  orderId: string,
+  reason: string,
+  lines: AdjustOrderLineInput[],
+): Promise<ActionResult<OrderDetail>> {
+  const trimmed = reason.trim();
+  if (trimmed === "") {
+    return {
+      ok: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "An adjustment reason is required.",
+      },
+    };
+  }
+
+  try {
+    const data = await apiFetch<OrderDetail>(
+      `/api/orders/${encodeURIComponent(orderId)}/adjust`,
+      { method: "POST", body: { reason: trimmed, lines } },
     );
     revalidatePath("/orders");
     revalidatePath(`/orders/${orderId}`);

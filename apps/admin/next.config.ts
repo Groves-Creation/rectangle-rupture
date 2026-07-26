@@ -12,11 +12,6 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(appDir, "..", ".."),
   // The admin dashboard talks to the LIT API over HTTP only. Nothing here is
   // allowed to import `@lit/database` — the API is the single writer.
-  eslint: {
-    // Linting runs as its own turbo task (`pnpm --filter @lit/admin lint`);
-    // running it again inside `next build` would just double the work.
-    ignoreDuringBuilds: true,
-  },
 };
 
 export default nextConfig;

@@ -237,6 +237,23 @@ Allocates inventory and moves the order to `inventory_allocated`. If stock is
 short, allocates what is available, sets `fullyAllocated: false` on those
 lines, and still advances the status. (Backorders are Phase 2.)
 
+### POST /api/orders/:id/adjust   (permission `orders.approve`)
+```json
+{
+  "reason": "Store confirmed it only needs 2 cases",
+  "lines": [
+    { "lineId": "uuid", "quantityOrdered": 2 },
+    { "lineId": "uuid", "quantityOrdered": 0 }
+  ]
+}
+// 200 -> adjusted order detail
+```
+HQ may adjust a `submitted` or `under_review` order before allocation. A zero
+quantity removes that line, but at least one line must remain. Snapshot prices
+stay unchanged; line and order totals are recalculated from those snapshots.
+Every adjustment requires a reason and is written to both status history and
+the append-only audit log.
+
 ### POST /api/orders/:id/reject   (permission `orders.approve`)
 ```json
 { "reason": "required, non-empty" }

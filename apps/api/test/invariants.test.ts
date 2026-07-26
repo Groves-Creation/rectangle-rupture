@@ -434,6 +434,7 @@ describe("approval allocates inventory through the ledger", () => {
     });
     expect(submitted.statusCode).toBe(201);
     const orderId = submitted.json().order.id as string;
+    const lineId = submitted.json().order.lines[0].id as string;
 
     // Allocation must NOT happen at submit time.
     const [balanceAfterSubmit] = await db
@@ -441,6 +442,42 @@ describe("approval allocates inventory through the ledger", () => {
       .from(inventoryBalances)
       .where(eq(inventoryBalances.productVariantId, target.variantId));
     expect(balanceAfterSubmit!.allocated).toBe(balanceBefore!.allocated);
+
+    const forbiddenAdjustment = await app.inject({
+      method: "POST",
+      url: `/api/orders/${orderId}/adjust`,
+      headers: auth(manager),
+      payload: {
+        reason: "A store manager cannot rewrite a submitted order",
+        lines: [{ lineId, quantityOrdered: 2 }],
+      },
+    });
+    expect(forbiddenAdjustment.statusCode).toBe(403);
+
+    const removeEveryLine = await app.inject({
+      method: "POST",
+      url: `/api/orders/${orderId}/adjust`,
+      headers: auth(hq),
+      payload: {
+        reason: "Invalid attempt to empty the order",
+        lines: [{ lineId, quantityOrdered: 0 }],
+      },
+    });
+    expect(removeEveryLine.statusCode).toBe(400);
+
+    const adjusted = await app.inject({
+      method: "POST",
+      url: `/api/orders/${orderId}/adjust`,
+      headers: auth(hq),
+      payload: {
+        reason: "Store confirmed a lower quantity",
+        lines: [{ lineId, quantityOrdered: 2 }],
+      },
+    });
+    expect(adjusted.statusCode).toBe(200);
+    expect(adjusted.json().lines[0].quantityOrdered).toBe(2);
+    expect(adjusted.json().orderTotal).toBe(adjusted.json().lines[0].lineTotal);
+    expect(adjusted.json().statusHistory.at(-1).notes).toContain("Order adjusted");
 
     const approved = await app.inject({
       method: "POST",
@@ -451,7 +488,7 @@ describe("approval allocates inventory through the ledger", () => {
     expect(approved.statusCode).toBe(200);
     expect(approved.json().status).toBe("inventory_allocated");
 
-    const expectedUnits = 4 * target.unitsPerCase;
+    const expectedUnits = 2 * target.unitsPerCase;
 
     const [balanceAfter] = await db
       .select()

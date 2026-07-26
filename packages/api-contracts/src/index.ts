@@ -230,6 +230,23 @@ export const ApproveOrderSchema = z.object({ notes: z.string().max(1000).optiona
 
 export const RejectOrderSchema = z.object({ reason: z.string().min(1).max(1000) });
 
+export const AdjustOrderSchema = z.object({
+  reason: z.string().trim().min(1).max(1000),
+  lines: z
+    .array(
+      z.object({
+        lineId: z.string().uuid(),
+        /** Zero removes the line; a positive value replaces its pack quantity. */
+        quantityOrdered: z.number().int().min(0).max(100_000),
+      }),
+    )
+    .min(1)
+    .refine(
+      (lines) => new Set(lines.map((line) => line.lineId)).size === lines.length,
+      "Each order line may only be adjusted once",
+    ),
+});
+
 export const OrderListQuerySchema = z.object({
   storeId: z.string().uuid().optional(),
   status: OrderStatusSchema.optional(),

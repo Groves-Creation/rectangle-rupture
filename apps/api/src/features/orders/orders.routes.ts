@@ -3,6 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { orders } from "@lit/database";
 import {
+  AdjustOrderSchema,
   ApproveOrderSchema,
   ErrorResponseSchema,
   OrderDetailSchema,
@@ -17,6 +18,7 @@ import { withIdempotency } from "../../lib/idempotency.js";
 import { getOrderDetail, listOrders } from "./orders.queries.js";
 import { submitOrder } from "./submit-order.service.js";
 import { approveOrder, rejectOrder } from "./approve-order.service.js";
+import { adjustOrder } from "./adjust-order.service.js";
 
 export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
@@ -105,6 +107,40 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
       // client-supplied id, so a guessed order id cannot leak another store.
       await assertLocationAccess(app.db, request.currentUser!.sub, detail.storeId);
       return detail;
+    },
+  );
+
+  app.post(
+    "/:id/adjust",
+    {
+      preHandler: [app.authenticate, app.requirePermission("orders.approve")],
+      schema: {
+        tags: ["orders"],
+        params: z.object({ id: z.string().uuid() }),
+        body: AdjustOrderSchema,
+        response: {
+          200: OrderDetailSchema,
+          400: ErrorResponseSchema,
+          403: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const userId = request.currentUser!.sub;
+      const [order] = await app.db
+        .select({ storeId: orders.storeId })
+        .from(orders)
+        .where(eq(orders.id, request.params.id))
+        .limit(1);
+
+      if (!order) throw ApiError.notFound("Order not found");
+      await assertLocationAccess(app.db, userId, order.storeId);
+
+      return adjustOrder(app.db, userId, request.params.id, request.body, {
+        ipAddress: request.ip,
+      });
     },
   );
 

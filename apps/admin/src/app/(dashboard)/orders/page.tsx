@@ -39,7 +39,7 @@ export default async function OrdersPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
         <p className="text-sm text-muted-foreground">
-          Review submitted store orders and approve or reject them.
+          Review submitted store orders and adjust, approve, or reject them.
         </p>
       </div>
 
