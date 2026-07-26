@@ -162,6 +162,7 @@ export async function seedDatabase(db: Database, options: { quiet?: boolean } = 
     // --- roles and permissions ------------------------------------------------
     const permissionSpecs = [
       { code: "catalog.read", description: "Browse the product catalog" },
+      { code: "catalog.write", description: "Create and manage catalog products" },
       { code: "orders.create", description: "Submit orders for a store" },
       { code: "orders.read", description: "View orders" },
       { code: "orders.approve", description: "Approve or reject submitted orders" },
@@ -195,6 +196,7 @@ export async function seedDatabase(db: Database, options: { quiet?: boolean } = 
       { roleId: storeManagerRole!.id, permissionId: permByCode.get("orders.create")! },
       { roleId: storeManagerRole!.id, permissionId: permByCode.get("orders.read")! },
       { roleId: hqAdminRole!.id, permissionId: permByCode.get("catalog.read")! },
+      { roleId: hqAdminRole!.id, permissionId: permByCode.get("catalog.write")! },
       { roleId: hqAdminRole!.id, permissionId: permByCode.get("orders.read")! },
       { roleId: hqAdminRole!.id, permissionId: permByCode.get("orders.approve")! },
       { roleId: hqAdminRole!.id, permissionId: permByCode.get("customers.manage")! },

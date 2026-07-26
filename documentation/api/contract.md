@@ -199,6 +199,52 @@ Returns a single item in the same shape, plus:
 { "description": "...", "barcodes": ["012345678905"], "warehouseId": "uuid" }
 ```
 
+### GET /api/catalog/ingest-metadata   (permission `catalog.write`)
+Returns the active brand/category suggestions and warehouses available to the
+signed-in user's organization:
+```json
+{
+  "brands": ["Brand"],
+  "categories": ["Gummies"],
+  "warehouses": [{ "id": "uuid", "code": "WH-001", "name": "Main DC" }]
+}
+```
+
+### POST /api/catalog   (permission `catalog.write`)
+Creates the product, sellable variant, case pack, default price-book entry,
+optional barcode, opening inventory movement, and audit record atomically.
+Brand and category names are reused case-insensitively or created when new.
+```json
+{
+  "name": "Product Name",
+  "description": "Optional customer-facing copy",
+  "brandName": "Brand",
+  "categoryName": "Gummies",
+  "sku": "SKU-0001",
+  "variantName": "Blue Razz",
+  "barcode": "012345678905",
+  "barcodeType": "UPC",
+  "unitPrice": "3.5000",
+  "casePrice": "38.0000",
+  "unitsPerCase": 12,
+  "minimumOrderQuantity": 1,
+  "warehouseId": "uuid",
+  "initialStock": 240,
+  "isAgeRestricted": false,
+  "image": {
+    "fileName": "product.png",
+    "contentType": "image/png",
+    "base64": "base64 bytes without a data-URL prefix"
+  }
+}
+// 201
+{ "productId": "uuid", "variantId": "uuid", "sku": "SKU-0001", "imageUrl": "https://..." }
+```
+`image` is optional. JPEG, PNG, and WebP are accepted up to 4 MB; the API checks
+both the declared content type and the file signature. Stored images are served
+from `GET /api/catalog/images/:fileName` with immutable cache headers. Opening
+stock always passes through the inventory ledger.
+
 ---
 
 ## Cart

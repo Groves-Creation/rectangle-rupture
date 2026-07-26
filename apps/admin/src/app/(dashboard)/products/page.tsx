@@ -4,7 +4,10 @@ import { CATALOG_PAGE_SIZE } from "@/lib/api/pagination";
 import { isNextControlFlowError, serializeError } from "@/lib/api/errors";
 import type { SerializedError } from "@/lib/api/errors";
 import { apiFetch } from "@/lib/api/server-client";
-import type { CatalogResponse } from "@/lib/api/types";
+import type {
+  CatalogIngestMetadata,
+  CatalogResponse,
+} from "@/lib/api/types";
 import { requireSession } from "@/lib/auth/session";
 
 import { ProductsTable } from "./products-table";
@@ -42,11 +45,17 @@ export default async function ProductsPage() {
 
   let initialData: CatalogResponse | null = null;
   let initialError: SerializedError | null = null;
+  let ingestMetadata: CatalogIngestMetadata | null = null;
 
   try {
     initialData = await apiFetch<CatalogResponse>("/api/catalog", {
       query: { storeId: store.id, limit: CATALOG_PAGE_SIZE, offset: 0 },
     });
+    if (session.user.roles.includes("hq_admin")) {
+      ingestMetadata = await apiFetch<CatalogIngestMetadata>(
+        "/api/catalog/ingest-metadata",
+      );
+    }
   } catch (error) {
     if (isNextControlFlowError(error)) throw error;
     initialError = serializeError(error);
@@ -54,23 +63,34 @@ export default async function ProductsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Header storeLabel={`${store.code} — ${store.name}`} />
+      <Header
+        storeLabel={`${store.code} — ${store.name}`}
+        canManage={ingestMetadata !== null}
+      />
       {initialError ? <ApiErrorNotice error={initialError} /> : null}
       <ProductsTable
         storeId={store.id}
         stores={session.stores}
         initialData={initialData}
+        ingestMetadata={ingestMetadata}
       />
     </div>
   );
 }
 
-function Header({ storeLabel }: { storeLabel?: string }) {
+function Header({
+  storeLabel,
+  canManage = false,
+}: {
+  storeLabel?: string;
+  canManage?: boolean;
+}) {
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
       <p className="text-sm text-muted-foreground">
-        Read-only catalog{storeLabel ? ` priced for ${storeLabel}` : ""}.
+        {canManage ? "Manage" : "Browse"} the catalog
+        {storeLabel ? ` priced for ${storeLabel}` : ""}.
       </p>
     </div>
   );
