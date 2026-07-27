@@ -11,10 +11,12 @@ import {
   productVariants,
   products,
   stores,
+  users,
 } from "@lit/database";
 import { ApiError } from "../../lib/errors.js";
 import { addMoney, compareMoney, multiplyMoney, ZERO_MONEY } from "../../lib/money.js";
 import { writeAuditLog } from "../../lib/audit.js";
+import { sendOrderStatusEmail } from "../../lib/email/index.js";
 import { getOrderDetail } from "./orders.queries.js";
 import {
   resolveStorePriceBook,
@@ -193,5 +195,28 @@ export async function submitOrder(
     return order!.id;
   });
 
-  return getOrderDetail(db, orderId);
+  const detail = await getOrderDetail(db, orderId);
+
+  // Send order confirmation email to the submitter
+  db.select({ email: users.email, fullName: users.fullName })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+    .then(([subUser]) => {
+      if (subUser?.email) {
+        sendOrderStatusEmail(subUser.email, {
+          customerName: subUser.fullName,
+          orderNumber: detail.orderNumber,
+          status: detail.status,
+          items: detail.lines.map((l) => ({
+            name: l.name,
+            quantity: l.quantityOrdered,
+            price: `$${(Number(l.lineTotal) / 100).toFixed(2)}`,
+          })),
+          totalAmount: `$${(Number(detail.orderTotal) / 100).toFixed(2)}`,
+        }).catch((err) => console.error("Failed to send order status email:", err));
+      }
+    });
+
+  return detail;
 }

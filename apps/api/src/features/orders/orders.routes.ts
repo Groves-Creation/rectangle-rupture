@@ -1,7 +1,7 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { orders } from "@lit/database";
+import { orders, users } from "@lit/database";
 import {
   AdjustOrderSchema,
   ApproveOrderSchema,
@@ -15,6 +15,7 @@ import {
 import { assertLocationAccess } from "../../plugins/auth.js";
 import { ApiError } from "../../lib/errors.js";
 import { withIdempotency } from "../../lib/idempotency.js";
+import { sendShippingNoticeEmail } from "../../lib/email/index.js";
 import { getOrderDetail, listOrders } from "./orders.queries.js";
 import { submitOrder } from "./submit-order.service.js";
 import { approveOrder, rejectOrder } from "./approve-order.service.js";
@@ -208,6 +209,51 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
       return rejectOrder(app.db, userId, request.params.id, request.body.reason, {
         ipAddress: request.ip,
       });
+    },
+  );
+
+  app.post(
+    "/:id/ship",
+    {
+      preHandler: [app.authenticate, app.requirePermission("orders.approve")],
+      schema: {
+        tags: ["orders"],
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({
+          carrier: z.string().min(1),
+          trackingNumber: z.string().min(1),
+          trackingUrl: z.string().url().optional(),
+        }),
+        response: {
+          200: z.object({ success: z.boolean(), message: z.string() }),
+          403: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const userId = request.currentUser!.sub;
+      const detail = await getOrderDetail(app.db, request.params.id);
+      await assertLocationAccess(app.db, userId, detail.storeId);
+
+      const [subUser] = await app.db
+        .select({ email: users.email, fullName: users.fullName })
+        .from(users)
+        .innerJoin(orders, eq(orders.submittedByUserId, users.id))
+        .where(eq(orders.id, request.params.id))
+        .limit(1);
+
+      if (subUser?.email) {
+        await sendShippingNoticeEmail(subUser.email, {
+          customerName: subUser.fullName,
+          orderNumber: detail.orderNumber,
+          carrier: request.body.carrier,
+          trackingNumber: request.body.trackingNumber,
+          trackingUrl: request.body.trackingUrl,
+        });
+      }
+
+      return { success: true, message: `Shipping notice dispatched for order ${detail.orderNumber}` };
     },
   );
 };

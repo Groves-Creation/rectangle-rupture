@@ -17,6 +17,7 @@ import {
 import { ApiError } from "../../lib/errors.js";
 import { writeAuditLog } from "../../lib/audit.js";
 import { hashPassword } from "../auth/auth.service.js";
+import { sendWelcomeEmail } from "../../lib/email/index.js";
 
 async function organizationForUser(db: Database, userId: string): Promise<string> {
   const [user] = await db
@@ -398,5 +399,11 @@ export async function createCustomer(
   if (!created) {
     throw new Error("Customer was created but could not be reloaded");
   }
+  if (input.sendWelcome) {
+    sendWelcomeEmail(normalizedInviteEmail, { name: input.inviteName }).catch((err) => {
+      console.error("Failed to send welcome email:", err);
+    });
+  }
+
   return created;
 }

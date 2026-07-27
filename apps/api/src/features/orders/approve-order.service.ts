@@ -7,10 +7,12 @@ import {
   orderStatusHistory,
   orders,
   recordMovement,
+  users,
 } from "@lit/database";
 import { and } from "drizzle-orm";
 import { ApiError } from "../../lib/errors.js";
 import { writeAuditLog } from "../../lib/audit.js";
+import { sendOrderStatusEmail } from "../../lib/email/index.js";
 import { getOrderDetail } from "./orders.queries.js";
 
 /** Statuses from which approval or rejection is still meaningful. */
@@ -139,7 +141,25 @@ export async function approveOrder(
     });
   });
 
-  return getOrderDetail(db, orderId);
+  const detail = await getOrderDetail(db, orderId);
+
+  db.select({ email: users.email, fullName: users.fullName })
+    .from(users)
+    .innerJoin(orders, eq(orders.submittedByUserId, users.id))
+    .where(eq(orders.id, orderId))
+    .limit(1)
+    .then(([subUser]) => {
+      if (subUser?.email) {
+        sendOrderStatusEmail(subUser.email, {
+          customerName: subUser.fullName,
+          orderNumber: detail.orderNumber,
+          status: detail.status,
+          totalAmount: `$${(Number(detail.orderTotal) / 100).toFixed(2)}`,
+        }).catch((err) => console.error("Failed to send order approval status email:", err));
+      }
+    });
+
+  return detail;
 }
 
 export async function rejectOrder(
@@ -183,5 +203,23 @@ export async function rejectOrder(
     });
   });
 
-  return getOrderDetail(db, orderId);
+  const detail = await getOrderDetail(db, orderId);
+
+  db.select({ email: users.email, fullName: users.fullName })
+    .from(users)
+    .innerJoin(orders, eq(orders.submittedByUserId, users.id))
+    .where(eq(orders.id, orderId))
+    .limit(1)
+    .then(([subUser]) => {
+      if (subUser?.email) {
+        sendOrderStatusEmail(subUser.email, {
+          customerName: subUser.fullName,
+          orderNumber: detail.orderNumber,
+          status: detail.status,
+          totalAmount: `$${(Number(detail.orderTotal) / 100).toFixed(2)}`,
+        }).catch((err) => console.error("Failed to send order rejection status email:", err));
+      }
+    });
+
+  return detail;
 }

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "email:preview": "tsx src/lib/email/preview.ts",
     "start": "tsx src/index.ts",
     "//build": "Intentionally absent. The API runs from TypeScript source via tsx, and workspace packages are consumed as source, so a bare tsc emit would produce unresolvable imports. Bundling (tsup or esbuild) belongs with the deployment work, which is deliberately deferred. `typecheck` is what validates this package in CI.",
     "typecheck": "tsc --noEmit",
@@ -27,6 +28,7 @@
     "fastify-type-provider-zod": "^6.0.0",
     "ioredis": "^5.9.0",
     "postgres": "^3.4.7",
+    "resend": "^6.18.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

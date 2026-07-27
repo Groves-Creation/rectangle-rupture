@@ -18,6 +18,8 @@ const EnvSchema = z.object({
   PUBLIC_API_URL: z.string().url().optional(),
   /** May be absolute or relative to the API process working directory. */
   IMAGE_UPLOAD_DIR: z.string().default("../../data/product-images"),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().default("onboarding@resend.dev"),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
